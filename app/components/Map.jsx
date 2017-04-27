@@ -68,6 +68,24 @@ export default class Main extends React.Component {
             .enter()
             .append('path')
             .attr('d', path);
+
+        let locations = [
+            [-122.41732, 37.8071299],
+            [-122.41412, 37.8074099],
+            [-122.41081, 37.8078399],
+            [-122.4060299, 37.8066299],
+            [-122.4033099, 37.8050199],
+            [-122.40103, 37.80296],
+            [-122.3989199, 37.8006099]
+        ];
+
+        svg.selectAll("circle")
+            .data(locations).enter()
+            .append("circle")
+            .attr("cx", d => projection(d)[0])
+            .attr("cy", d => projection(d)[1])
+            .attr("r", "3px")
+            .attr("fill", "red")
     }
 
     render() {
