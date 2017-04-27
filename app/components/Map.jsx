@@ -1,6 +1,7 @@
 import React from 'react';
-import neighbourhoodData from '../assets/sfmaps/neighborhoods.json';
+import NeighbourhoodData from '../assets/sfmaps/neighborhoods.json';
 import * as d3 from 'd3';
+import MapData from '../Utils/MapData';
 
 export default class Main extends React.Component {
 
@@ -9,10 +10,15 @@ export default class Main extends React.Component {
     }
 
     componentDidMount() {
-        this.getMap();
+        MapData.fetchRoutList()
+            .then((xmlRoutes) => MapData.parseRouteList(xmlRoutes))
+            .then((routes) => MapData.fetchStops(routes[0].tag))
+            .then((xmlStops) => MapData.parseStops(xmlStops))
+            .then((stopsJSON) => stopsJSON.map((json) => [parseFloat(json.lon), parseFloat(json.lat)]))
+            .then((locations) => this.getMap(locations));
     }
 
-    getMap() {
+    getMap(locations) {
 
         var width = '500';
         var height = '500';
@@ -24,7 +30,7 @@ export default class Main extends React.Component {
         var path = d3.geoPath()
             .projection(projection);
 
-        var bounds = path.bounds(neighbourhoodData);
+        var bounds = path.bounds(NeighbourhoodData);
 
         var latitude = {
             min: bounds[1][1],
@@ -64,26 +70,16 @@ export default class Main extends React.Component {
             .projection(projection);
 
         svg.selectAll('path')
-            .data(neighbourhoodData.features)
+            .data(NeighbourhoodData.features)
             .enter()
             .append('path')
             .attr('d', path);
 
-        let locations = [
-            [-122.41732, 37.8071299],
-            [-122.41412, 37.8074099],
-            [-122.41081, 37.8078399],
-            [-122.4060299, 37.8066299],
-            [-122.4033099, 37.8050199],
-            [-122.40103, 37.80296],
-            [-122.3989199, 37.8006099]
-        ];
-
         svg.selectAll("circle")
             .data(locations).enter()
             .append("circle")
-            .attr("cx", d => projection(d)[0])
-            .attr("cy", d => projection(d)[1])
+            .attr("cx", d =>  projection(d)[0])
+            .attr("cy", d =>  projection(d)[1])
             .attr("r", "3px")
             .attr("fill", "red")
     }
