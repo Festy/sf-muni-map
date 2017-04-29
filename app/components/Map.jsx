@@ -10,23 +10,50 @@ export default class Main extends React.Component {
     }
 
     componentDidMount() {
-        MapData.fetchRoutList()
-            .then((xmlRoutes) => MapData.parseRouteList(xmlRoutes))
-            .then((routes) => MapData.fetchStops(routes[0].tag))
-            .then((xmlStops) => MapData.parseStops(xmlStops))
-            .then((stopsJSON) => stopsJSON.map((json) => [parseFloat(json.lon), parseFloat(json.lat)]))
-            .then((locations) => this.getMap(locations));
+        let width = '800';
+        let height = '800';
+        let projection = this.initProjection(height, width);
+        let svg = this.drawMap(projection, height, width);
+
+        let vehicleMap = new Map();
+
+        let initialTime = (new Date((new Date).getTime() - 30 * 60000)).getTime();
+
+        let lastTryTime = this.getAllVehicles(vehicleMap, initialTime, svg, projection);
+
+        setInterval(() => {
+            lastTryTime = this.getAllVehicles(vehicleMap, lastTryTime, svg, projection);
+        }, 30000);
     }
 
-    getMap(locations) {
+    getAllVehicles(vehicleMap, lastTryTime, svg, projection) {
+        MapData.fetchRoutList()
+            .then(MapData.parseRouteList)
+            .then((routeList) => {
+                routeList.forEach((route) => {
+                    MapData.fetchVehicles(route.tag, lastTryTime)
+                        .then(MapData.parseVehicles)
+                        .then((JSONVehicles) => {
+                            for (let vehicle of JSONVehicles) {
+                                vehicleMap.set(vehicle.id, [
+                                    parseFloat(vehicle.lon),
+                                    parseFloat(vehicle.lat)
+                                ]);
+                            }
+                            console.log("total muni:" + vehicleMap.size);
+                            return Array.from(vehicleMap.values());
+                        })
+                        .then((vehicleLocations) => this.drawVehicles(svg, vehicleLocations, projection, 'blue'));
+                })
+            });
 
-        var width = '500';
-        var height = '500';
+        return (new Date()).getTime();
+    }
 
+    initProjection(height, width) {
         var projection = d3.geoMercator()
             .scale(1)
             .translate([0, 0]);
-
         var path = d3.geoPath()
             .projection(projection);
 
@@ -58,6 +85,10 @@ export default class Main extends React.Component {
         projection
             .scale(scaleFactor)
             .translate(translate);
+        return projection;
+    }
+
+    drawMap(projection, height, width) {
 
         var svg = d3.select('#map')
             .append('svg')
@@ -75,13 +106,40 @@ export default class Main extends React.Component {
             .append('path')
             .attr('d', path);
 
+        return svg;
+    }
+
+    drawStops(svg, locations, projection, color) {
         svg.selectAll("circle")
             .data(locations).enter()
             .append("circle")
             .attr("cx", d =>  projection(d)[0])
             .attr("cy", d =>  projection(d)[1])
             .attr("r", "3px")
-            .attr("fill", "red")
+            .attr("fill", color)
+    }
+
+    drawVehicles(svg, locations, projection, color) {
+
+        let vehicles = svg.selectAll("rect")
+            .data(locations);
+
+        vehicles
+            .transition()
+            .duration(15000)
+            .ease(d3.easeLinear)
+            .attr("x", d =>  projection(d)[0])
+            .attr("y", d =>  projection(d)[1]);
+
+        vehicles.enter()
+            .append("rect")
+            .attr("x", d =>  projection(d)[0])
+            .attr("y", d =>  projection(d)[1])
+            .attr('width', 3)
+            .attr('height', 3)
+            .attr("fill", color);
+
+        vehicles.exit().remove();
     }
 
     render() {
