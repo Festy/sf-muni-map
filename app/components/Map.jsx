@@ -1,63 +1,76 @@
 import React from 'react';
 import NeighbourhoodData from '../assets/sfmaps/neighborhoods.json';
 import * as d3 from 'd3';
-import MapData from '../Utils/MapData';
+d3.tip = require("d3-tip");
+import MapData from '../utils/MapData';
 
 export default class Main extends React.Component {
 
     constructor() {
         super();
+        this.canvasHeight = '700';
+        this.canvasWidth = '700';
+        this.routeMap = new Map();
+        this.initProjection(NeighbourhoodData);
     }
 
     componentDidMount() {
-        let width = '800';
-        let height = '800';
-        let projection = this.initProjection(height, width);
-        let svg = this.drawMap(projection, height, width);
-
-        let vehicleMap = new Map();
-
-        let initialTime = (new Date((new Date).getTime() - 30 * 60000)).getTime();
-
-        let lastTryTime = this.getAllVehicles(vehicleMap, initialTime, svg, projection);
-
-        setInterval(() => {
-            lastTryTime = this.getAllVehicles(vehicleMap, lastTryTime, svg, projection);
-        }, 30000);
+        this.initSVG();
+        this.drawMap(NeighbourhoodData, 'grey');
+        this.initRouteTip();
+        this.getRoutes();
     }
 
-    getAllVehicles(vehicleMap, lastTryTime, svg, projection) {
-        MapData.fetchRoutList()
-            .then(MapData.parseRouteList)
-            .then((routeList) => {
-                routeList.forEach((route) => {
-                    MapData.fetchVehicles(route.tag, lastTryTime)
-                        .then(MapData.parseVehicles)
-                        .then((JSONVehicles) => {
-                            for (let vehicle of JSONVehicles) {
-                                vehicleMap.set(vehicle.id, [
-                                    parseFloat(vehicle.lon),
-                                    parseFloat(vehicle.lat)
-                                ]);
-                            }
-                            console.log("total muni:" + vehicleMap.size);
-                            return Array.from(vehicleMap.values());
-                        })
-                        .then((vehicleLocations) => this.drawVehicles(svg, vehicleLocations, projection, 'blue'));
+    getRoutes() {
+        MapData.fetchAllRoutes()
+            .then((data) => {
+                if (data.route) {
+                    for (let routeItem of data.route) {
+                        let existingData = this.routeMap.get() || {};
+                        this.routeMap.set(routeItem.tag, {
+                            ...existingData,
+                            tag: routeItem.tag,
+                            title: routeItem.title
+                        });
+                        this.getRouteConfig(routeItem.tag);
+                    }
+                }
+            });
+    }
+
+    getRouteConfig(routeTag) {
+        MapData.fetchRouteConfig(routeTag)
+            .then((data) => {
+                if (data.route) {
+                    let existingData = this.routeMap.get(routeTag);
+
+                    this.routeMap.set(routeTag, {
+                        ...existingData,
+                        ...data.route
+                    });
+                    this.drawRoute(data.route);
+                }
+            })
+    }
+
+    getAllVehiclesPosition(initialTime) {
+        MapData.fetchAllRoutes()
+            .then((routes) => {
+                routes.forEach((route) => {
+                    this.getVehiclesPosition(route.tag, initialTime);
                 })
             });
-
-        return (new Date()).getTime();
     }
 
-    initProjection(height, width) {
-        var projection = d3.geoMercator()
+    initProjection(map) {
+        this.projection = d3.geoMercator()
             .scale(1)
             .translate([0, 0]);
-        var path = d3.geoPath()
-            .projection(projection);
 
-        var bounds = path.bounds(NeighbourhoodData);
+        var path = d3.geoPath()
+            .projection(this.projection);
+
+        var bounds = path.bounds(map);
 
         var latitude = {
             min: bounds[1][1],
@@ -69,8 +82,8 @@ export default class Main extends React.Component {
             max: bounds[0][0]
         };
 
-        var horizontalScale = width / (longitude.min - longitude.max);
-        var verticalScale = height / (latitude.min - latitude.max);
+        var horizontalScale = this.canvasWidth / (longitude.min - longitude.max);
+        var verticalScale = this.canvasHeight / (latitude.min - latitude.max);
         var paddingFactor = 0.95; // To avoid touching the border of container.
 
         // Find out in which dir map will fit without stretching or overflowing the container.
@@ -80,64 +93,111 @@ export default class Main extends React.Component {
         var midLongitude = (longitude.min + longitude.max) / 2;
 
         // move center to the midLatitude and midLongitude of the map
-        var translate = [(width / 2 - scaleFactor * midLongitude), (height / 2 - scaleFactor * midLatitude)];
+        var translate = [(this.canvasWidth / 2 - scaleFactor * midLongitude), (this.canvasHeight / 2 - scaleFactor * midLatitude)];
 
-        projection
+        this.projection
             .scale(scaleFactor)
             .translate(translate);
-        return projection;
     }
 
-    drawMap(projection, height, width) {
-
-        var svg = d3.select('#map')
+    initSVG() {
+        this.svg = d3.select('#map')
             .append('svg')
-            .attr('width', width)
-            .attr('height', height)
-            .attr('stroke', 'green')
+            .attr('width', this.canvasWidth)
+            .attr('height', this.canvasHeight)
             .attr('fill', 'white');
+    }
 
+    initRouteTip() {
+        this.routeTip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function(d) {
+                return `<strong>Route Name:</strong> <span>${d.title}</span>`;
+            });
+
+        this.svg.call(this.routeTip);
+    }
+
+    drawMap(map, color) {
         var path = d3.geoPath()
-            .projection(projection);
+            .projection(this.projection);
 
-        svg.selectAll('path')
-            .data(NeighbourhoodData.features)
+        this.svg.selectAll('path')
+            .data(map.features)
             .enter()
             .append('path')
-            .attr('d', path);
-
-        return svg;
+            .attr('d', path)
+            .attr('stroke', color);
     }
 
-    drawStops(svg, locations, projection, color) {
-        svg.selectAll("circle")
+    drawRoute(route) {
+        let path = route.path[0].point;
+        let routeColor = "#" + route.color;
+        let line = d3.line()
+            .x(d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .y(d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+            .curve(d3.curveLinear);
+
+        let routeTip = this.routeTip;
+        this.svg
+            .datum(route)
+            .append('path')
+            .attr('d', (d) => line(d.path[0].point))
+            .attr('stroke', routeColor)
+            .attr("fill", "none")
+            .attr('stroke-width',2)
+            .attr('title', (d) => d.title)
+            .on('mouseover',function(d) {
+                d3.select(this)
+                    .attr('stroke-width',5);
+                routeTip.show(d);
+            })
+            .on('mouseout',function (d) {
+                d3.select(this)
+                    .attr('stroke-width',2);
+                routeTip.hide(d);
+            })
+    }
+
+    drawStops(locations, color) {
+        this.svg.selectAll("circle")
             .data(locations).enter()
             .append("circle")
-            .attr("cx", d =>  projection(d)[0])
-            .attr("cy", d =>  projection(d)[1])
+            .attr("cx", d =>  this.projection(d)[0])
+            .attr("cy", d =>  this.projection(d)[1])
             .attr("r", "3px")
             .attr("fill", color)
     }
 
-    drawVehicles(svg, locations, projection, color) {
+    drawVehicles(vehiclesData, color) {
 
-        let vehicles = svg.selectAll("rect")
-            .data(locations);
+        let vehicles = this.svg.selectAll("rect")
+            .data(vehiclesData, d => d.lat + ''+ d.lon);
 
         vehicles
+            .attr('width', 10)
+            .attr('height', 10)
+            .attr("fill", 'red')
             .transition()
-            .duration(15000)
-            .ease(d3.easeLinear)
-            .attr("x", d =>  projection(d)[0])
-            .attr("y", d =>  projection(d)[1]);
+                .duration(1500)
+                .ease(d3.easeLinear)
+                .attr("x", d =>  this.projection([d.lon, d.lat])[0])
+                .attr("y", d =>  this.projection([d.lon, d.lat])[1])
+            .transition()
+                .delay(1500).duration(0)
+                .attr("fill", 'blue')
+                .attr('width', 6)
+                .attr('height', 6);
 
         vehicles.enter()
             .append("rect")
-            .attr("x", d =>  projection(d)[0])
-            .attr("y", d =>  projection(d)[1])
-            .attr('width', 3)
-            .attr('height', 3)
-            .attr("fill", color);
+            .attr("x", d =>  this.projection([d.lon, d.lat])[0])
+            .attr("y", d =>  this.projection([d.lon, d.lat])[1])
+            .attr('width', 6)
+            .attr('height', 6)
+            .attr("fill", color)
+            .attr('title', d => d.id);
 
         vehicles.exit().remove();
     }
