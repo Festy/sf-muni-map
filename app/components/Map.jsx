@@ -18,6 +18,7 @@ export default class Main extends React.Component {
         this.initSVG();
         this.drawMap(NeighbourhoodData, 'grey');
         this.initRouteTip();
+        this.initStopTip();
         this.getRoutes();
     }
 
@@ -32,6 +33,7 @@ export default class Main extends React.Component {
                             tag: routeItem.tag,
                             title: routeItem.title
                         });
+                        console.log("total routes "+ this.routeMap.size);
                         this.getRouteConfig(routeItem.tag);
                     }
                 }
@@ -49,6 +51,7 @@ export default class Main extends React.Component {
                         ...data.route
                     });
                     this.drawRoute(data.route);
+                    this.drawStopsForRoute(data.route);
                 }
             })
     }
@@ -119,6 +122,17 @@ export default class Main extends React.Component {
         this.svg.call(this.routeTip);
     }
 
+    initStopTip() {
+        this.stopTip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function(d) {
+                return `<strong>Stop Name:</strong> <span>${d.title}</span>`;
+            });
+
+        this.svg.call(this.stopTip);
+    }
+
     drawMap(map, color) {
         var path = d3.geoPath()
             .projection(this.projection);
@@ -160,14 +174,26 @@ export default class Main extends React.Component {
             })
     }
 
-    drawStops(locations, color) {
-        this.svg.selectAll("circle")
-            .data(locations).enter()
+    drawStopsForRoute(route) {
+        let stopTip = this.stopTip;
+        this.svg
+            .data(route.stop)
             .append("circle")
-            .attr("cx", d =>  this.projection(d)[0])
-            .attr("cy", d =>  this.projection(d)[1])
+            .attr("cx", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .attr("cy", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
             .attr("r", "3px")
-            .attr("fill", color)
+            .attr('fill', 'black')
+            .on('mouseover',function() {
+                d3.select(this)
+                    .attr("r", "5px")
+                stopTip.show(route);
+            })
+            .on('mouseout',function () {
+                d3.select(this)
+                    .attr("r", "3px")
+                stopTip.hide(route);
+            })
+
     }
 
     drawVehicles(vehiclesData, color) {
