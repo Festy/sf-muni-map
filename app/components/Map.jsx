@@ -9,8 +9,8 @@ export default class Main extends React.Component {
 
     constructor() {
         super();
-        this.canvasHeight = '700';
-        this.canvasWidth = '700';
+        this.canvasHeight = '1000';
+        this.canvasWidth = '1000';
         this.lightColors = [
             '#FFCDD2',
             '#F8BBD0',
@@ -91,7 +91,7 @@ export default class Main extends React.Component {
                 }
                 this.drawAllVehicles();
             });
-        setTimeout(this.getAllVehicles.bind(this), 11000);
+        setTimeout(this.getAllVehicles.bind(this), 15000);
     }
 
     initProjection(map) {
@@ -197,20 +197,33 @@ export default class Main extends React.Component {
     drawRoute(route) {
         let path = route.path[0].point;
         let routeColor = "#" + route.color;
+        if (route.color === '000000') routeColor = 'red';
+
         let line = d3.line()
             .x(d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
             .y(d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
             .curve(d3.curveLinear);
 
+        function combinedPath(paths) {
+            let finalPath = "";
+            for (let path of paths) {
+                finalPath += line(path.point);
+            }
+
+            return finalPath;
+        }
+
         let routeTip = this.routeTip;
+
         this.svg
             .datum(route)
             .append('path')
-            .attr('d', (d) => line(d.path[0].point))
+            .attr('d', (d) => combinedPath(d.path))
             .attr('stroke', routeColor)
             .attr("fill", "none")
-            .attr('stroke-width',2)
+            .attr('stroke-width',1)
             .attr('title', (d) => d.title)
+            .attr('id', (d) => 'route'+d.tag)
             .on('mouseover',function(d) {
                 d3.select(this)
                     .attr('stroke-width',5);
@@ -218,7 +231,7 @@ export default class Main extends React.Component {
             })
             .on('mouseout',function (d) {
                 d3.select(this)
-                    .attr('stroke-width',2);
+                    .attr('stroke-width',1);
                 routeTip.hide(d);
             })
     }
@@ -230,16 +243,16 @@ export default class Main extends React.Component {
             .append("circle")
             .attr("cx", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
             .attr("cy", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
-            .attr("r", "3px")
+            .attr("r", "4px")
             .attr('fill', 'black')
             .on('mouseover',function() {
                 d3.select(this)
-                    .attr("r", "5px")
+                    .attr("r", "7px")
                 stopTip.show(route);
             })
             .on('mouseout',function () {
                 d3.select(this)
-                    .attr("r", "3px")
+                    .attr("r", "4px")
                 stopTip.hide();
             })
 
@@ -265,22 +278,28 @@ export default class Main extends React.Component {
             .append("rect")
             .attr("x", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
             .attr("y", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
-            .attr('width', 4)
-            .attr('height', 4)
+            .attr('width', 6)
+            .attr('height', 6)
             .attr("fill", 'blue')
             .attr('title', d => d.id)
             .on('mouseover',function(d) {
                 d3.select(this)
-                    .attr("r", "5px")
+                    .attr('width', 10)
+                    .attr('height', 10)
+                d3.select('path#route'+d.routeTag)
+                    .attr('stroke-width',5);
                 vehicleTip.show({
                     id : d.id,
-                    routeTitle: routeMap.get(d.routeTag).title
+                    routeTitle: routeMap.get(d.routeTag).title //to avoid 'numerical only' ids
                 });
             })
-            .on('mouseout',function () {
+            .on('mouseout',function (d) {
                 d3.select(this)
-                    .attr("r", "3px")
+                    .attr('width', 6)
+                    .attr('height', 6)
                 vehicleTip.hide();
+                d3.select('path#route'+d.routeTag)
+                    .attr('stroke-width',1);
             });
 
         vehicles.exit().remove();
