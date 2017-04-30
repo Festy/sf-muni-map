@@ -16,6 +16,13 @@ var mapData = {
             .then((string) => JSON.parse(string));
     },
 
+    fetchAllVehicles: (lastTryTime) => {
+        let url = URL + '&command=vehicleLocations'+ (lastTryTime ? '&t='+lastTryTime : '');
+        return fetch(url)
+            .then((response) => response.text())
+            .then((string) => JSON.parse(string));
+    },
+
     fetchRouteConfig: (routeTag) => {
         return fetch(URL + '&command=routeConfig'+'&r='+routeTag)
             .then((response) => response.text())

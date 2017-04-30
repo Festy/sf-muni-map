@@ -1,5 +1,6 @@
 import React from 'react';
 import NeighbourhoodData from '../assets/sfmaps/neighborhoods.json';
+import streets from '../assets/sfmaps/streets.json';
 import * as d3 from 'd3';
 d3.tip = require("d3-tip");
 import MapData from '../utils/MapData';
@@ -10,16 +11,41 @@ export default class Main extends React.Component {
         super();
         this.canvasHeight = '700';
         this.canvasWidth = '700';
+        this.lightColors = [
+            '#FFCDD2',
+            '#F8BBD0',
+            '#E1BEE7',
+            '#B39DDB',
+            '#9FA8DA',
+            '#90CAF9',
+            '#B2EBF2',
+            '#C8E6C9',
+            '#DCEDC8',
+            '#F0F4C3',
+            '#FFECB3',
+            '#FFECB3',
+            '#D7CCC8',
+            '#FFCCBC',
+            '#CFD8DC'
+        ];
+
         this.routeMap = new Map();
+        this.vehicleMap = new Map();
         this.initProjection(NeighbourhoodData);
+        this.lastAttemptTime = null;
+
+
     }
 
     componentDidMount() {
         this.initSVG();
-        this.drawMap(NeighbourhoodData, 'grey');
+        this.drawMap(NeighbourhoodData, {strokeWidth: 1, stroke: 'brown', fill: 'random'});
+        this.drawMap(streets, {strokeWidth: 1, stroke: 'darkgrey'});
         this.initRouteTip();
         this.initStopTip();
+        this.initVehicleTip();
         this.getRoutes();
+        this.getAllVehicles();
     }
 
     getRoutes() {
@@ -56,13 +82,16 @@ export default class Main extends React.Component {
             })
     }
 
-    getAllVehiclesPosition(initialTime) {
-        MapData.fetchAllRoutes()
-            .then((routes) => {
-                routes.forEach((route) => {
-                    this.getVehiclesPosition(route.tag, initialTime);
-                })
+    getAllVehicles() {
+        MapData.fetchAllVehicles(this.lastAttemptTime)
+            .then((data) => {
+                this.lastAttemptTime = data.lastAttemptTime;
+                for (let vehicle of data.vehicle) {
+                    this.vehicleMap.set(vehicle.id, vehicle);
+                }
+                this.drawAllVehicles();
             });
+        setTimeout(this.getAllVehicles.bind(this), 11000);
     }
 
     initProjection(map) {
@@ -133,7 +162,19 @@ export default class Main extends React.Component {
         this.svg.call(this.stopTip);
     }
 
-    drawMap(map, color) {
+    initVehicleTip() {
+        this.vehicleTip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function(d) {
+                return `<strong>Vehicle ID:</strong> <span>${d.id}</span> <br /> <strong>Route:</strong> <span>${d.routeTitle}</span>`;
+            });
+
+        this.svg.call(this.vehicleTip);
+    }
+
+    drawMap(map, options) {
+
         var path = d3.geoPath()
             .projection(this.projection);
 
@@ -142,7 +183,15 @@ export default class Main extends React.Component {
             .enter()
             .append('path')
             .attr('d', path)
-            .attr('stroke', color);
+            .attr('stroke', options.stroke)
+            .attr('stroke-width', options.strokeWidth)
+            .attr('fill', () => {
+                let fill;
+                if (!options.fill) fill = 'none';
+                else if (options.fill === 'random') fill = this.lightColors[Math.floor(15 * Math.random())];
+                else fill = options.fill;
+                return fill;
+            })
     }
 
     drawRoute(route) {
@@ -191,39 +240,48 @@ export default class Main extends React.Component {
             .on('mouseout',function () {
                 d3.select(this)
                     .attr("r", "3px")
-                stopTip.hide(route);
+                stopTip.hide();
             })
 
     }
 
-    drawVehicles(vehiclesData, color) {
+    drawAllVehicles() {
+
+        let vehicleList = Array.from(this.vehicleMap.values());
+        let vehicleTip = this.vehicleTip;
+        let routeMap = this.routeMap;
 
         let vehicles = this.svg.selectAll("rect")
-            .data(vehiclesData, d => d.lat + ''+ d.lon);
+            .data(vehicleList);
 
         vehicles
-            .attr('width', 10)
-            .attr('height', 10)
-            .attr("fill", 'red')
             .transition()
-                .duration(1500)
                 .ease(d3.easeLinear)
-                .attr("x", d =>  this.projection([d.lon, d.lat])[0])
-                .attr("y", d =>  this.projection([d.lon, d.lat])[1])
-            .transition()
-                .delay(1500).duration(0)
-                .attr("fill", 'blue')
-                .attr('width', 6)
-                .attr('height', 6);
+                .attr("x", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+                .attr("y", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+                .duration(1500);
 
         vehicles.enter()
             .append("rect")
-            .attr("x", d =>  this.projection([d.lon, d.lat])[0])
-            .attr("y", d =>  this.projection([d.lon, d.lat])[1])
-            .attr('width', 6)
-            .attr('height', 6)
-            .attr("fill", color)
-            .attr('title', d => d.id);
+            .attr("x", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .attr("y", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+            .attr('width', 4)
+            .attr('height', 4)
+            .attr("fill", 'blue')
+            .attr('title', d => d.id)
+            .on('mouseover',function(d) {
+                d3.select(this)
+                    .attr("r", "5px")
+                vehicleTip.show({
+                    id : d.id,
+                    routeTitle: routeMap.get(d.routeTag).title
+                });
+            })
+            .on('mouseout',function () {
+                d3.select(this)
+                    .attr("r", "3px")
+                vehicleTip.hide();
+            });
 
         vehicles.exit().remove();
     }
