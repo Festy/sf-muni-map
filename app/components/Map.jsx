@@ -30,10 +30,18 @@ export default class Main extends React.Component {
             strokeWidth: 1,
             stroke: 'brown',
             fill: 'random'
-        }, '#svg_container');
+        }, '#svg_container', true);
 
         this.getAllRoutes();
         this.getAllVehicles();
+
+        setTimeout(() => {
+            fetch('./streets.json')
+                .then(response => response.text())
+                .then((json) => {
+                    this.mapDrawer.drawMap(JSON.parse(json), {strokeWidth: 0.4, stroke: 'darkgrey'}, false);
+                });
+        }, 2000);
 
     }
 

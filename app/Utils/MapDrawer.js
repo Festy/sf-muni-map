@@ -72,11 +72,13 @@ export default class MapDrawer {
         document.body.removeChild(downloadLink);
     }
     
-    drawMap (map, options, svgId) {
+    drawMap (map, options, svgId, initiate) {
 
-        if (!this.svg) this._initSVG(svgId);
-        if (!this.projection) this._initProjection(map);
-        if (!this.tooltips) this._initTooltips();
+        if (initiate) {
+            if (!this.svg) this._initSVG(svgId);
+            if (!this.projection) this._initProjection(map);
+            if (!this.tooltips) this._initTooltips();
+        }
 
         var path = d3.geoPath()
             .projection(this.projection);
@@ -172,7 +174,7 @@ export default class MapDrawer {
             .attr('d', (d) => combinedPath(d.path))
             .attr('stroke', routeColor)
             .attr("fill", "none")
-            .attr('stroke-width', 1)
+            .attr('stroke-width', 1.5)
             .attr('title', (d) => d.title)
             .attr('id', (d) => 'route' + d.tag)
             .attr('routegroup', (d) => 'route' + d.tag)
@@ -183,7 +185,7 @@ export default class MapDrawer {
             })
             .on('mouseout', function (d) {
                 d3.select(this)
-                    .attr('stroke-width', 1);
+                    .attr('stroke-width', 1.5);
                 if (routeTip) routeTip.hide(d);
             })
     }
@@ -253,7 +255,7 @@ export default class MapDrawer {
 
                 vehicleTip.hide();
                 d3.select('path#route' + d.routeTag)
-                    .attr('stroke-width', 1);
+                    .attr('stroke-width', 1.5);
             });
 
         vehicles.exit().remove();
