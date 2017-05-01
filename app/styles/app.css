@@ -1,3 +1,6 @@
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
 .d3-tip {
     line-height: 1;
     font-weight: bold;
@@ -5,4 +8,20 @@
     background: rgba(0, 0, 0, 0.8);
     color: #fff;
     border-radius: 2px;
+}
+
+#app_title {
+    font-size: 40px;
+    font-weight: 300;
+    text-align: center;
+    margin-top: 25px;
+    margin-bottom: 10px;
+}
+
+#route_list_div {
+    margin: 20px;
+}
+
+#svg_container {
+    margin: 0 auto;
 }
