@@ -4,6 +4,7 @@ import streets from '../assets/sfmaps/streets.json';
 import * as d3 from 'd3';
 d3.tip = require("d3-tip");
 import MapData from '../utils/MapData';
+import RouteSelector from './RouteSelector.jsx';
 
 export default class Main extends React.Component {
 
@@ -34,24 +35,44 @@ export default class Main extends React.Component {
         this.initProjection(NeighbourhoodData);
         this.lastAttemptTime = null;
 
-
+        this.state = {
+            visibleRoutes: "",
+            routes: []
+        };
     }
 
     componentDidMount() {
         this.initSVG();
         this.drawMap(NeighbourhoodData, {strokeWidth: 1, stroke: 'brown', fill: 'random'});
-        this.drawMap(streets, {strokeWidth: 1, stroke: 'darkgrey'});
         this.initRouteTip();
         this.initStopTip();
         this.initVehicleTip();
         this.getRoutes();
         this.getAllVehicles();
+        this.drawMap(streets, {strokeWidth: 1, stroke: 'darkgrey'});
+    }
+
+    handleChange(visibleRoutes) {
+
+        let visibleRoutesList = visibleRoutes.split(',');
+
+        for (let route of this.state.routes) {
+            let group = this.svg.selectAll('#route'+route.label);
+
+            if (visibleRoutesList.indexOf(route.label) === -1) group.attr('visibility', 'hidden');
+            else group.attr('visibility', 'visible');
+        }
+
+        this.setState({
+            visibleRoutes : visibleRoutes
+        });
     }
 
     getRoutes() {
         MapData.fetchAllRoutes()
             .then((data) => {
                 if (data.route) {
+                    let routeNames = []
                     for (let routeItem of data.route) {
                         let existingData = this.routeMap.get() || {};
                         this.routeMap.set(routeItem.tag, {
@@ -59,9 +80,21 @@ export default class Main extends React.Component {
                             tag: routeItem.tag,
                             title: routeItem.title
                         });
-                        console.log("total routes "+ this.routeMap.size);
+
                         this.getRouteConfig(routeItem.tag);
+                        routeNames.push(routeItem.tag);
+
+                        this.setState({
+                            routes: this.state.routes.concat([
+                                {
+                                    value: routeItem.tag,
+                                    label: routeItem.tag
+                                }
+                            ]),
+                            visibleRoutes: this.state.visibleRoutes.length ? this.state.visibleRoutes + "," + routeItem.tag : routeItem.tag
+                        });
                     }
+
                 }
             });
     }
@@ -144,7 +177,7 @@ export default class Main extends React.Component {
         this.routeTip = d3.tip()
             .attr('class', 'd3-tip')
             .offset([-10, 0])
-            .html(function(d) {
+            .html(function (d) {
                 return `<strong>Route Name:</strong> <span>${d.title}</span>`;
             });
 
@@ -155,7 +188,7 @@ export default class Main extends React.Component {
         this.stopTip = d3.tip()
             .attr('class', 'd3-tip')
             .offset([-10, 0])
-            .html(function(d) {
+            .html(function (d) {
                 return `<strong>Stop Name:</strong> <span>${d.title}</span>`;
             });
 
@@ -166,7 +199,7 @@ export default class Main extends React.Component {
         this.vehicleTip = d3.tip()
             .attr('class', 'd3-tip')
             .offset([-10, 0])
-            .html(function(d) {
+            .html(function (d) {
                 return `<strong>Vehicle ID:</strong> <span>${d.id}</span> <br /> <strong>Route:</strong> <span>${d.routeTitle}</span>`;
             });
 
@@ -200,8 +233,8 @@ export default class Main extends React.Component {
         if (route.color === '000000') routeColor = 'red';
 
         let line = d3.line()
-            .x(d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
-            .y(d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+            .x(d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .y(d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
             .curve(d3.curveLinear);
 
         function combinedPath(paths) {
@@ -221,17 +254,18 @@ export default class Main extends React.Component {
             .attr('d', (d) => combinedPath(d.path))
             .attr('stroke', routeColor)
             .attr("fill", "none")
-            .attr('stroke-width',1)
+            .attr('stroke-width', 1)
             .attr('title', (d) => d.title)
-            .attr('id', (d) => 'route'+d.tag)
-            .on('mouseover',function(d) {
+            .attr('id', (d) => 'route' + d.tag)
+            .attr('routegroup', (d) => 'route' + d.tag)
+            .on('mouseover', function (d) {
                 d3.select(this)
-                    .attr('stroke-width',5);
+                    .attr('stroke-width', 5);
                 routeTip.show(d);
             })
-            .on('mouseout',function (d) {
+            .on('mouseout', function (d) {
                 d3.select(this)
-                    .attr('stroke-width',1);
+                    .attr('stroke-width', 1);
                 routeTip.hide(d);
             })
     }
@@ -241,16 +275,16 @@ export default class Main extends React.Component {
         this.svg
             .data(route.stop)
             .append("circle")
-            .attr("cx", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
-            .attr("cy", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+            .attr("cx", d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .attr("cy", d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
             .attr("r", "4px")
             .attr('fill', 'black')
-            .on('mouseover',function() {
+            .on('mouseover', function () {
                 d3.select(this)
                     .attr("r", "7px")
                 stopTip.show(route);
             })
-            .on('mouseout',function () {
+            .on('mouseout', function () {
                 d3.select(this)
                     .attr("r", "4px")
                 stopTip.hide();
@@ -269,37 +303,38 @@ export default class Main extends React.Component {
 
         vehicles
             .transition()
-                .ease(d3.easeLinear)
-                .attr("x", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
-                .attr("y", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
-                .duration(1500);
+            .ease(d3.easeLinear)
+            .attr("x", d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .attr("y", d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+            .duration(1500);
 
         vehicles.enter()
             .append("rect")
-            .attr("x", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
-            .attr("y", d =>  this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
+            .attr("x", d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[0])
+            .attr("y", d => this.projection([parseFloat(d.lon), parseFloat(d.lat)])[1])
             .attr('width', 6)
             .attr('height', 6)
             .attr("fill", 'blue')
             .attr('title', d => d.id)
-            .on('mouseover',function(d) {
+            .attr('id', (d) => 'route' + d.routeTag)
+            .on('mouseover', function (d) {
                 d3.select(this)
                     .attr('width', 10)
                     .attr('height', 10)
-                d3.select('path#route'+d.routeTag)
-                    .attr('stroke-width',5);
+                d3.select('path#route' + d.routeTag)
+                    .attr('stroke-width', 5);
                 vehicleTip.show({
-                    id : d.id,
+                    id: d.id,
                     routeTitle: routeMap.get(d.routeTag).title //to avoid 'numerical only' ids
                 });
             })
-            .on('mouseout',function (d) {
+            .on('mouseout', function (d) {
                 d3.select(this)
                     .attr('width', 6)
                     .attr('height', 6)
                 vehicleTip.hide();
-                d3.select('path#route'+d.routeTag)
-                    .attr('stroke-width',1);
+                d3.select('path#route' + d.routeTag)
+                    .attr('stroke-width', 1);
             });
 
         vehicles.exit().remove();
@@ -307,8 +342,13 @@ export default class Main extends React.Component {
 
     render() {
         return (
-            <div id="map">
+            <div>
+                <RouteSelector routes={this.state.routes} visibleRoutes = {this.state.visibleRoutes} handleChange = {this.handleChange.bind(this)}/>
+                <div id="map">
+                </div>
             </div>
+
         )
     }
+
 }
